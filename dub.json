@@ -1,0 +1,8 @@
+{
+	"name": "postid",
+	"description": "A minimal D application.",
+	"copyright": "Copyright © 2015, david",
+	"authors": ["david"],
+	"dependencies": {
+	}
+}
