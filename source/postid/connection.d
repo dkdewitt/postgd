@@ -39,7 +39,7 @@ void main() {
     char x = 't';
     char y = 'z';
     //writeln(strcmp(&x, &y));
-    auto conn = PQconnectdb("user=pylync password=dev dbname=pylync_groups hostaddr=192.168.2.7 port=5432"); 
+    auto conn = PQconnectdb(); 
 
     //writeln(conn);
     writeln(PQstatus(conn));
@@ -56,7 +56,8 @@ void main() {
     writeln(PQgetisnull(res,0,3));
     char* field = PQgetvalue(res, 0, 3);
     const PQprintOpt* p1;
-    PQprint(stdout, res*, p1*);
+
+    //PQprint(f, res, p1);
 
     //writeln(strlen(field));
 }
@@ -65,6 +66,7 @@ void main() {
 //Types
 extern (C){
     struct PGconn {};
+    struct PGcancel;
     alias uint Oid;
     alias char pqbool;
 
@@ -199,6 +201,34 @@ extern (C){
                          const int *paramFormats,
                          int resultFormat);
 
+    PGresult *PQfn(PGconn *conn,
+               int fnid,
+               int *result_buf,
+               int *result_len,
+               int result_is_int,
+               const PQArgBlock *args,
+               int nargs);
+
+
+    struct PQArgBlock{
+        int len;
+        int isint;
+        union u
+        {
+            int* ptr;
+            int integer;
+        }
+    }
+
+    struct PGnotify
+    {
+        char *relname;              
+        int  be_pid;                
+        char *extra;                
+    }
+
+
+
     PGresult *PQdescribePrepared(PGconn *conn, const char *stmtName);
 
     PGresult *PQdescribePortal(PGconn *conn, const char *portalName);
@@ -252,11 +282,113 @@ extern (C){
     //data type of  statement param
     Oid PQparamtype(const PGresult *res, int param_number);
 
+
+    ///Look into this
     void PQprint(FILE *fout,      /* output stream */
              const PGresult *res,
              const PQprintOpt *po);
 
+
+    char *PQcmdStatus(PGresult *res);
+
+    char *PQcmdTuples(PGresult *res);
+
+    Oid PQoidValue(const PGresult *res);
+
+    char *PQoidStatus(const PGresult *res);
+
+    char *PQescapeLiteral(PGconn *conn, const char *str, size_t length);
+
+    char *PQescapeIdentifier(PGconn *conn, const char *str, size_t length);
+
+    size_t PQescapeStringConn(PGconn *conn,
+                          char *to, const char *from, size_t length,
+                          int *error);
+
+    size_t PQescapeString (char *to, const char *from, size_t length);
+
+    char *PQescapeByteaConn(PGconn *conn,
+                                 const  char *from,
+                                 size_t from_length,
+                                 size_t *to_length);
+
+    //Select single-row mode for the currently-executing query
+    int PQsetSingleRowMode(PGconn *conn);
+
+
+
+    /*
+    *   Query cancellers
+    */
+
+    PGcancel *PQgetCancel(PGconn *conn);
+    
+    void PQfreeCancel(PGcancel *cancel);
+
+    int PQcancel(PGcancel *cancel, char *errbuf, int errbufsize);
+
+    int PQrequestCancel(PGconn *conn);
+
+
+
+    
+    //Async notification
+
+    //The function PQnotifies returns the next notification from a list of unhandled notification messages received from the server
+    PGnotify *PQnotifies(PGconn *conn);
+
+
+    //Copy functions
+
+
+    //Sends data to server during COPY_IN state
+    int PQputCopyData(PGconn *conn,
+                  const char *buffer,
+                  int nbytes);
+
+    
+    //Sends end of data inication to server during COPY_IN state
+    int PQputCopyEnd(PGconn *conn,
+                 const char *errormsg);
+
+    //Fn receives data from the server during COPY_OUT state
+    int PQgetCopyData(PGconn *conn,
+                  char **buffer,
+                  int async);
+
+
+
+    //Control functions
+
+    //Returns the client encoding
+    int PQclientEncoding(const PGconn *conn);
+
+    char *pg_encoding_to_char(int encoding_id);
+
+    //Set client encoding
+    int PQsetClientEncoding(PGconn *conn, const char *encoding);
+
+
+    enum PGVerbosity{
+        PQERRORS_TERSE,
+        PQERRORS_DEFAULT,
+        PQERRORS_VERBOSE
+    } 
+
+    PGVerbosity PQsetErrorVerbosity(PGconn *conn, PGVerbosity verbosity);
+
+    //Enables tracing of the client/server communication to a debugging file stream.
+    void PQtrace(PGconn *conn, FILE *stream);
+
+    //Disables trace started by PQTrace
+    void PQuntrace(PGconn *conn);
+
+
+
+
+    // Miscellaneous Functions
 }
+
 
 
 
