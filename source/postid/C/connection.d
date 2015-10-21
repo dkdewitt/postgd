@@ -3,7 +3,7 @@ import std.stdio;
 import std.conv;
 
 
-pragma(lib, "pq");
+//pragma(lib, "pq");
 
 
 

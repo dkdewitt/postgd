@@ -1,3 +1,4 @@
+module postid.connection;
 import std.stdio;
 import std.conv;
 import std.string;
@@ -56,20 +57,47 @@ struct ResultSet{
     
     PGresult* res;
     int nFields;
-    int rows;
-    Rows rrng;
+    int nrows;
+    Row[] rows;
     int currentRow;
     int currentField;
-
-        int ins;
+    int ins;
+    string[] columnNames;
     this(PGresult* res){
         this.res = res;
         this.nFields = PQnfields(res);
-        this.rows= PQntuples(res);
-        this.rrng = Rows(this.rows);
+        this.nrows= PQntuples(res);
+        
+        foreach(i; 0..nFields){
+            columnNames ~=  to!string(to!Cstring(PQfname(res,i)));
+            
+        }
+
+                foreach(i; 0..nrows){
+            this.rows ~= Row(i, this.nFields);
+        }
     }
 
+    void getHeaders(){
+        foreach(i; 0..nFields){
+            write(to!Cstring(PQfname(res,i)));
+            write("|");
+        }writeln();
+    }
 
+    void getRows(){
+
+        foreach(row; rows){
+            foreach(field; row){
+
+                
+
+                write(to!Cstring(PQgetvalue(res, row.rowNumber, field)));
+                write("|");
+            }
+            writeln();
+        }
+    }
 
 
 }
@@ -77,19 +105,22 @@ struct ResultSet{
 struct Rows{
     int i = 0;
     int len;
-    Row row;
+    Row[] row;
 
     this(int res){
         this.len = res;
+        foreach(i; 0..res){
+            row ~= Row(i, 10);
+        }
     }
     @property bool empty()
     {
         return i == len;
     }
 
-    @property int front()
+    @property Row front()
     {
-        return i;
+        return row[i];
     }
 
     void popFront()
@@ -103,9 +134,11 @@ struct Rows{
 struct Row{
     int i = 0;
     int fieldNumber;
+    int rowNumber;
 
 
-    this(int fieldNumber){
+    this(int rowNumber, int fieldNumber){
+        this.rowNumber = rowNumber;
         this.fieldNumber = fieldNumber;
     }
     @property bool empty()
@@ -125,46 +158,4 @@ struct Row{
 }
 
 
-
-
-
-void main() {
-
-    auto conn = PQconnectdb("user=test password=test dbname=usda hostaddr=127.0.0.1 port=5432"); 
-    writeln(PQstatus(conn));
-
-
-    if (PQstatus(conn) != CONNECTION_OK)
-    {
-        writeln("Connection to database failed");
-        //CloseConn(conn);
-    }
-
-    PGresult* res = PQexec(conn, "select * from public.fd_group;");
-    Cstring st = PQgetvalue(res, 0, 0);
-    //writeln(PQgetisnull(res,0,3));
-    //char* field = PQgetvalue(res, 0, 3);
-    const PQprintOpt* p1;
-    auto nFields = PQnfields(res);
-    //for(int i = 0; i < PQntuples(res); i++){
-        auto ins = PQntuples(res);
-        Rows row = Rows(ins);
-        ResultSet rs = ResultSet(res);
-        writeln(rs);
-        
-    /*foreach(int i; Rows(ins)){
-        foreach(int j; Row(PQnfields(res))){
-            Cstring st1 = PQgetvalue(res, i, j);
-            write(st1);
-        }
-        write("\n");
-    }*/
-
-    //writeln(Rows(ins));
-
-
-    //PQprint(f, res, p1);
-    writeln(st);
-    //writeln(PQntuples(res));
-}
 
