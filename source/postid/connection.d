@@ -24,6 +24,13 @@ struct Connection{
     void reset(){
         PQreset(conn);
     }
+
+    ResultSet query(string query){
+
+        PGresult* res = PQexec(conn, query.toStringz());
+        ResultSet results = ResultSet(res);
+        return results;
+    }
 }
 
 struct Cstring
