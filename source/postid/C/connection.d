@@ -6,6 +6,33 @@ import std.conv;
 //pragma(lib, "pq");
 
 
+struct Cstring
+{
+    size_t i = 0;
+    char* str;
+
+    this(char* s)
+    {
+        str = s;
+    }
+
+    @property bool empty()
+    {
+        return str[i] == '\0';
+    }
+
+    @property char front()
+    {
+        return str[i];
+    }
+
+    void popFront()
+    {
+        ++i;
+    }
+}
+
+
 
 //Types
 extern (C){
