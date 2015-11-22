@@ -4,7 +4,21 @@ import std.conv;
 import std.string;
 import std.range;
 import std.algorithm;
+import std.exception;
 import C.connection;
+
+
+class PGException: Exception{
+         this (string msg) {
+         super(msg);
+     }
+}
+
+class NotConnectedToDatabaseException : PGException {
+     this (string msg) {
+         super(msg);
+     }
+ }
 
 struct Connection{
     PGconn* conn;
@@ -38,10 +52,28 @@ struct Connection{
     }
 
     ResultSet query(string query){
-
+        if(this.status == CONNECTION_BAD){
+            throw new NotConnectedToDatabaseException("Not connection to database");
+        }
         PGresult* res = PQexec(conn, query.toStringz());
         ResultSet results = ResultSet(res);
         return results;
+    }
+
+    void executePreparedStatement(string query){
+        auto s = "2001".toStringz();
+        auto statement = PQprepare(conn, "stmtname".toStringz(), "select * from data_src where year > %s".toStringz(), 1, null);
+        /*auto paramVals = ["2004".toStringz()];
+
+          PGresult *res = PQexecPrepared(conn,
+                         statement,
+                         1,
+                         paramVals,
+                         [4],
+                         [0],
+                         0);
+
+        writeln(statement);*/
     }
 }
 
@@ -60,21 +92,48 @@ struct ResultSet{
 
     //string[] headers;
 
+    Row opIndex(int i){
+        return rows[i];
+    }
+
+    Cstring opIndex(int i, int j){
+        auto row = rows[i];
+        return row[j];
+    }
+
     struct Row{
         int currentField;
         int fieldNumber;
         int rowNumber;
         Cstring[] vals;
-        this(int rowNumber, int fieldNumber){
+        const ResultSet resSet;
+        this(PGresult* res,int rowNumber, int fieldNumber, const ref ResultSet resSet){
             this.rowNumber = rowNumber;
             this.fieldNumber = fieldNumber;
-            foreach(field; 0..fieldNumber){
-                //vals ~= to!Cstring(PQgetvalue(this.res, rowNumber, field));
+            this.resSet = resSet;
+            foreach(field; 0..fieldNumber){//writeln(resSet.columnNames);
+                vals ~= to!Cstring(PQgetvalue(res, rowNumber, field));
             }
         }
         void insert(Cstring data){
             vals ~= data;
         }
+
+        Cstring opIndex(int i){
+            return vals[i];
+        }
+
+        Cstring opIndex(string columnName){
+            auto idx = std.algorithm.countUntil(this.resSet.columnNames, columnName);
+            if(idx>0){
+                return vals[idx];
+            }
+            else{
+                throw new NotConnectedToDatabaseException("Fix");
+            }
+
+        }
+
         @property bool empty()
         {
             return currentField == fieldNumber;
@@ -104,8 +163,10 @@ struct ResultSet{
         }
 
                 foreach(i; 0..nrows){
-            this.rows ~= Row(i, this.nFields);
+            this.rows ~= Row(this.res,i, this.nFields, this);
+            //writeln(Row(this.res,i, this.nFields));
         }
+        //writeln(nrows);
     }
 
     @property bool empty()
@@ -117,11 +178,15 @@ struct ResultSet{
 
     @property Row front()
     {
-        auto row = Row(currentRow, nFields);
+        //writeln(currentRow);
+        //auto row = 0;
+        //writeln(this.rows);
+        auto row = rows[currentRow];
+        /*auto row = Row(currentRow, nFields);
 
         foreach(field; 0..nFields){
             row.insert(to!Cstring(PQgetvalue(res, currentRow, field)));
-        }
+        }*/
         
         return row;
         

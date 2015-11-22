@@ -97,6 +97,7 @@ extern (C){
 
 
     enum int CONNECTION_OK = 0;
+    enum int CONNECTION_BAD = 1;
 
     PGconn *PQsetdbLogin(const char *pghost,
                 const char *pgport,

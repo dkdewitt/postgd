@@ -11,16 +11,19 @@ void main() {
     	"db": "usda",
     	]); 
 
-    writeln(conn.status);
-    //auto res = conn.query("select column_name, data_type, character_maximum_length
-//from INFORMATION_SCHEMA.COLUMNS where table_name = 'tbl1';");
-    //res.getRows();
-auto res = conn.query("select * from data_src;");
-
-	res.getHeaders();
-    foreach(row; res){
-    	//row["authors"];
-        writeln(row);
-    }
-
+    try{
+        auto res = conn.query("select * from data_src where year > '2001';");
+        conn.executePreparedStatement("");
+    	//res.getHeaders();
+        foreach(row; res){
+        	writeln(row["year"]);
+        }
+        res.getHeaders();
+        //writeln(res[11][2]);
+        conn.close();
+        auto res2 = conn.query("select * from data_src;");
+        //writeln(res2);
+        } catch(PGException e){
+            writeln(e.msg);
+        }    
 }
