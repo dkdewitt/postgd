@@ -8,6 +8,13 @@ import std.exception;
 import C.connection;
 
 
+enum TypeTag {
+    INT = "int",
+    STRING = "string",
+    BOLLEAN = "bool"
+
+}
+
 class PGException: Exception{
          this (string msg) {
          super(msg);
@@ -19,6 +26,140 @@ class NotConnectedToDatabaseException : PGException {
          super(msg);
      }
  }
+
+
+
+
+struct PreparedStatement{
+
+    PGconn* conn;
+    string query;
+    //string[] params;
+    PGresult* statement2;
+    TypeTag[] parameters;
+    int paramNum;
+
+    Param[] params;
+    const char[] stmt = "PREPARED STATEMENT".dup;
+    struct Param{
+        TypeTag tag;
+        string val;     
+        this(TypeTag tag, string val){
+            this.tag = tag;
+            this.val = val;
+        }
+    }
+
+    
+
+    private int numParams(string query){
+        bool inString;
+        bool inStatement;
+        int numberOfParameters = 1;
+        foreach(i, ch; query){
+            if(ch == '\''){    
+                inString = !inString;
+            }
+
+            if(ch=='"'){
+                inStatement = !inStatement;
+            }
+
+            if(ch == '?' && !(inStatement || inString)){
+                numberOfParameters +=1;
+            }
+        }
+        return numberOfParameters;
+    }
+
+    this(PGconn* conn, string query){
+        this.conn = conn;
+
+        this.paramNum = numParams(query);
+        writeln(this.paramNum);
+        params.length = this.paramNum;
+
+
+       this.statement2 = PQprepare(conn, toStringz(stmt), 
+            query.toStringz(), this.paramNum, null);
+       //writeln(Cstring(PQresultErrorMessage(this.statement2)));
+    }
+
+    void executePreparedStatement(){
+        //auto stmt = "stmtname3";
+        //PGresult* statement = PQprepare(this.conn, toStringz(stmt), 
+        //    "select * from data_src where year > $1".toStringz(), 1, null);
+        //auto resStatement = PQresultErrorMessage(statement);
+        //writeln(Cstring(PQresultErrorMessage(statement)));
+         char[] args = "1999\0".dup;
+        char*[2] argsStrings;
+        char[] args12 = "2000\0".dup;
+        argsStrings[0] = args.ptr;
+        argsStrings[1] = args.ptr;
+        //int[] vals = [1];
+
+
+        int x = 1;
+        ////int[] s = [];
+        //writeln(typeid(x).toString() == TypeTag.INT);
+        
+
+        //TypeTag[] tt;
+
+        //string s = "David";
+
+
+        //tt ~= TypeTag.INT; 
+        //tt  ~= TypeTag.STRING;
+
+        //writeln(tt);
+        const int x1 = 1;
+        char*[1] args1;
+        char[][] args2;
+        foreach(i,p; this.params){
+            writeln(p.val);
+            args2 ~= p.val.dup;
+            args1[i] = args2[0].ptr;
+        }
+
+        writeln(this.stmt);
+
+        
+
+
+        PGresult* res = PQexecPrepared(conn, toStringz(stmt), 1, args1.ptr, &x1, &x , 0);
+        ResultSet results = new ResultSet(res);
+        writeln(Cstring(PQresultErrorMessage(res)));
+        writeln(PQntuples(res));
+        //return results;
+    
+
+
+ 
+    }
+
+
+    void setParameter(int index, TypeTag parameterType, string val){
+        //Change to not > max ?
+        //params[index] = val;
+        if (index >  paramNum){
+            writeln("Fix this");
+        }
+        Param p = Param(parameterType, val);
+
+        writeln(index);
+        params[index-1] = p;
+        writeln(params);
+    }
+
+
+
+    void setInt(int index, int parameter){
+        setParameter(index, TypeTag.INT, to!string(parameter));
+    }
+
+}
+
 
 struct Connection{
     PGconn* conn;
@@ -56,30 +197,41 @@ struct Connection{
             throw new NotConnectedToDatabaseException("Not connection to database");
         }
         PGresult* res = PQexec(conn, query.toStringz());
-        ResultSet results = ResultSet(res);
+        ResultSet results = new ResultSet(res);
         return results;
     }
 
-    void executePreparedStatement(string query){
-        auto s = "2001".toStringz();
-        auto statement = PQprepare(conn, "stmtname".toStringz(), "select * from data_src where year > %s".toStringz(), 1, null);
-        /*auto paramVals = ["2004".toStringz()];
 
-          PGresult *res = PQexecPrepared(conn,
-                         statement,
-                         1,
-                         paramVals,
-                         [4],
-                         [0],
-                         0);
-
-        writeln(statement);*/
+    PreparedStatement createPreparedStatement(string query){
+        PreparedStatement ps = PreparedStatement(this.conn, query);
+        return ps;
     }
+
+    ResultSet executePreparedStatement(string query){
+        //auto s = "2001".toStringz();
+        auto stmt = "stmtname";
+        PGresult* statement = PQprepare(conn, toStringz(stmt), 
+            "select * from data_src where year > $1".toStringz(), 1, null);
+        writeln(PQresultStatus(statement));
+        char[] args = "1999\0".dup;
+        char*[1] argsStrings;
+        argsStrings[0] = args.ptr;
+
+        int[] vals = [1];
+
+        int x = 0;
+        PGresult* res = PQexecPrepared(conn, toStringz(stmt), 1, argsStrings.ptr, 0, &x , 0);
+        ResultSet results = new ResultSet(res);
+        return results;
+        }
+
+
+    
 }
 
 
 
-struct ResultSet{
+class ResultSet{
     
     PGresult* res;
     int nFields;
@@ -162,11 +314,9 @@ struct ResultSet{
             
         }
 
-                foreach(i; 0..nrows){
+        foreach(i; 0..nrows){
             this.rows ~= Row(this.res,i, this.nFields, this);
-            //writeln(Row(this.res,i, this.nFields));
         }
-        //writeln(nrows);
     }
 
     @property bool empty()
@@ -199,15 +349,12 @@ struct ResultSet{
 
 
 
-    void getHeaders(){
-        foreach(i; 0..nFields){
-            write(to!Cstring(PQfname(res,i)));
-            write("|");
-        }writeln();
+    @property
+    string[] headers(){
+        return columnNames;
     }
 
     void getRows(){
-
         foreach(row; rows){
             foreach(field; row){
 

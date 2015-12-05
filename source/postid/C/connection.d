@@ -38,7 +38,7 @@ struct Cstring
 extern (C){
     struct PGconn {};
     struct PGcancel;
-    alias uint Oid;
+    alias char Oid;
     alias char pqbool;
 
     enum PostgresPollingStatusType {
@@ -153,11 +153,12 @@ extern (C){
     PGresult *PQexecParams(PGconn *conn,
                        const char *command,
                        int nParams,
-                       const Oid *paramTypes,
-                       const char ** paramValues,
-                       const int *paramLengths,
-                       const int *paramFormats,
-                       int resultFormat);
+                       const Oid paramTypes,
+                       const char * paramValues,
+                       const int paramLengths,
+                       const int paramFormats,
+                       int resultFormat
+                       );
 
     PGresult *PQprepare(PGconn *conn,
                     const char *stmtName,
@@ -165,13 +166,22 @@ extern (C){
                     int nParams,
                     const Oid *paramTypes);
 
+    //PGresult *PQexecPrepared(PGconn *conn,
+    //                     const char *stmtName,
+    //                     int nParams,
+    //                     const char ** paramValues,
+    //                     const int *paramLengths,
+    //                     const int *paramFormats,
+    //                     int resultFormat);
+
     PGresult *PQexecPrepared(PGconn *conn,
                          const char *stmtName,
-                         int nParams,
-                         const char ** paramValues,
-                         const int *paramLengths,
+                         ulong nParams,
+                         const char **paramValues,
+                         const int paramLengths,
                          const int *paramFormats,
-                         int resultFormat);
+                         int resultFormat
+                         );
 
     PGresult *PQfn(PGconn *conn,
                int fnid,
