@@ -178,7 +178,7 @@ extern (C){
                          const char *stmtName,
                          ulong nParams,
                          const char **paramValues,
-                         const int paramLengths,
+                         const int *paramLengths,
                          const int *paramFormats,
                          int resultFormat
                          );

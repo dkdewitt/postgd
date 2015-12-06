@@ -5,6 +5,7 @@ import std.string;
 import std.range;
 import std.algorithm;
 import std.exception;
+import std.bitmanip;
 import C.connection;
 
 
@@ -55,7 +56,7 @@ struct PreparedStatement{
     private int numParams(string query){
         bool inString;
         bool inStatement;
-        int numberOfParameters = 1;
+        int numberOfParameters = 0;
         foreach(i, ch; query){
             if(ch == '\''){    
                 inString = !inString;
@@ -65,10 +66,11 @@ struct PreparedStatement{
                 inStatement = !inStatement;
             }
 
-            if(ch == '?' && !(inStatement || inString)){
+            if(ch == '$' && !(inStatement || inString)){
                 numberOfParameters +=1;
             }
         }
+
         return numberOfParameters;
     }
 
@@ -76,62 +78,48 @@ struct PreparedStatement{
         this.conn = conn;
 
         this.paramNum = numParams(query);
-        writeln(this.paramNum);
+
         params.length = this.paramNum;
 
 
        this.statement2 = PQprepare(conn, toStringz(stmt), 
             query.toStringz(), this.paramNum, null);
-       //writeln(Cstring(PQresultErrorMessage(this.statement2)));
+
     }
 
-    void executePreparedStatement(){
-        //auto stmt = "stmtname3";
-        //PGresult* statement = PQprepare(this.conn, toStringz(stmt), 
-        //    "select * from data_src where year > $1".toStringz(), 1, null);
-        //auto resStatement = PQresultErrorMessage(statement);
-        //writeln(Cstring(PQresultErrorMessage(statement)));
-         char[] args = "1999\0".dup;
-        char*[2] argsStrings;
-        char[] args12 = "2000\0".dup;
-        argsStrings[0] = args.ptr;
-        argsStrings[1] = args.ptr;
-        //int[] vals = [1];
+    ResultSet executePreparedStatement(){
 
+        char*[] paramValues;
+        int[] paramLengths;
+        int[] paramFormats;
 
-        int x = 1;
-        ////int[] s = [];
-        //writeln(typeid(x).toString() == TypeTag.INT);
-        
-
-        //TypeTag[] tt;
-
-        //string s = "David";
-
-
-        //tt ~= TypeTag.INT; 
-        //tt  ~= TypeTag.STRING;
-
-        //writeln(tt);
-        const int x1 = 1;
-        char*[1] args1;
         char[][] args2;
+        
+        ubyte[][] bts;
+
         foreach(i,p; this.params){
-            writeln(p.val);
-            args2 ~= p.val.dup;
-            args1[i] = args2[0].ptr;
+            ubyte[4] v;
+            if(p.tag == TypeTag.INT){
+                 v = nativeToBigEndian(to!int(p.val));
+                bts ~= v;
+                paramValues ~= cast(char*)bts[i];
+                paramLengths ~= v.sizeof;
+                paramFormats ~= 1;
+            }
+            else{
+                args2 ~= p.val.dup;
+                paramValues ~= args2[i].ptr;
+                paramLengths ~= p.sizeof;
+                paramFormats ~= 0;
+            }
+
+
         }
 
-        writeln(this.stmt);
-
-        
-
-
-        PGresult* res = PQexecPrepared(conn, toStringz(stmt), 1, args1.ptr, &x1, &x , 0);
+        PGresult* res = PQexecPrepared(conn, toStringz(stmt), this.paramNum, paramValues.ptr, paramLengths.ptr, paramFormats.ptr , 0);
         ResultSet results = new ResultSet(res);
-        writeln(Cstring(PQresultErrorMessage(res)));
-        writeln(PQntuples(res));
-        //return results;
+
+        return results;
     
 
 
@@ -146,16 +134,23 @@ struct PreparedStatement{
             writeln("Fix this");
         }
         Param p = Param(parameterType, val);
+            params[index-1] = p;
 
-        writeln(index);
-        params[index-1] = p;
-        writeln(params);
     }
 
 
 
     void setInt(int index, int parameter){
+         //auto ubarray = (cast(ubyte *)&parameter)[0..parameter.sizeof];
+        ubyte[4] ub = nativeToLittleEndian(parameter);
+  
         setParameter(index, TypeTag.INT, to!string(parameter));
+    }
+
+    void setString(int index, string parameter){
+
+        //ubyte[4] ub = nativeToLittleEndian!string(parameter);
+        setParameter(index, TypeTag.STRING, to!string(parameter));
     }
 
 }
@@ -207,23 +202,7 @@ struct Connection{
         return ps;
     }
 
-    ResultSet executePreparedStatement(string query){
-        //auto s = "2001".toStringz();
-        auto stmt = "stmtname";
-        PGresult* statement = PQprepare(conn, toStringz(stmt), 
-            "select * from data_src where year > $1".toStringz(), 1, null);
-        writeln(PQresultStatus(statement));
-        char[] args = "1999\0".dup;
-        char*[1] argsStrings;
-        argsStrings[0] = args.ptr;
 
-        int[] vals = [1];
-
-        int x = 0;
-        PGresult* res = PQexecPrepared(conn, toStringz(stmt), 1, argsStrings.ptr, 0, &x , 0);
-        ResultSet results = new ResultSet(res);
-        return results;
-        }
 
 
     
