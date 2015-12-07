@@ -5,8 +5,18 @@ import std.string;
 import std.range;
 import std.algorithm;
 import std.exception;
+import std.bitmanip;
+import std.format;
 import C.connection;
 
+
+enum TypeTag {
+    INT = "int",
+    STRING = "string",
+    BOLLEAN = "bool",
+    DOUBLE = "double",
+    TEXT = "text"
+}
 
 class PGException: Exception{
          this (string msg) {
@@ -19,6 +29,170 @@ class NotConnectedToDatabaseException : PGException {
          super(msg);
      }
  }
+
+
+
+
+struct PreparedStatement{
+
+    PGconn* conn;
+    string query;
+    //string[] params;
+    PGresult* statement2;
+    TypeTag[] parameters;
+    int paramNum;
+
+    Param[] params;
+    const char[] stmt = "PREPARED STATEMENT".dup;
+    struct Param{
+        TypeTag tag;
+        string val;     
+        this(TypeTag tag, string val){
+            this.tag = tag;
+            this.val = val;
+        }
+    }
+
+    
+
+    private int numParams(string query){
+        bool inString;
+        bool inStatement;
+        int numberOfParameters = 0;
+        foreach(i, ch; query){
+            if(ch == '\''){    
+                inString = !inString;
+            }
+
+            if(ch=='"'){
+                inStatement = !inStatement;
+            }
+
+            if(ch == '$' && !(inStatement || inString)){
+                numberOfParameters +=1;
+            }
+        }
+
+        return numberOfParameters;
+    }
+
+    this(PGconn* conn, string query){
+        this.conn = conn;
+
+        this.paramNum = numParams(query);
+
+        params.length = this.paramNum;
+
+
+       this.statement2 = PQprepare(conn, toStringz(stmt), 
+            query.toStringz(), this.paramNum, null);
+
+    }
+
+    ~this(){
+        PQexec(this.conn, "DEALLOCATE \"PREPARED STATEMENT\";");
+        
+    }
+
+    ResultSet executePreparedStatement(){
+
+        char*[] paramValues;
+        int[] paramLengths;
+        int[] paramFormats;
+
+        char[][] args2;
+        
+        ubyte[][] bts;
+
+        foreach(i,p; this.params){
+            //writeln(paramNum);
+            if(p.tag == TypeTag.INT){
+                ubyte[int.sizeof] v;
+                 v = nativeToBigEndian(to!int(p.val));
+                bts ~= v;
+                paramValues ~= cast(char*)bts[i];
+                paramLengths ~= v.sizeof;
+                paramFormats ~= 1;
+            }
+            else if(p.tag == TypeTag.DOUBLE){
+                ubyte[double.sizeof] v;
+                v = nativeToBigEndian(to!double(p.val));
+                bts ~= v;
+                paramValues ~= cast(char*)bts[i];
+                paramLengths ~= v.sizeof;
+                paramFormats ~= 1;
+            }
+            else if(p.tag == TypeTag.TEXT){
+                ubyte[] v;
+                auto x = format("%s%s", p.val, "\0").dup;
+
+                v = cast(ubyte[]) x;
+                bts ~= v;
+                paramValues ~= cast(char*)bts[i];
+                paramLengths ~= v.sizeof;
+                paramFormats ~= 0;
+            }
+            else{
+                auto xyz = p.val.dup;
+                paramValues ~= xyz.ptr;
+                //paramValues ~= p.val.dup.ptr;
+                paramLengths ~= p.val.sizeof;
+                paramFormats ~= 0;
+            }
+
+
+
+
+        }
+
+        PGresult* res = PQexecPrepared(conn, toStringz(stmt), this.paramNum, paramValues.ptr, paramLengths.ptr, paramFormats.ptr , 0);
+        ResultSet results = new ResultSet(res);
+
+        return results;
+    
+
+
+ 
+    }
+
+
+    void setParameter(int index, TypeTag parameterType, string val){
+        //Change to not > max ?
+        //params[index] = val;
+        if (index >  paramNum){
+            writeln("Fix this");
+        }
+        Param p = Param(parameterType, val);
+            params[index-1] = p;
+
+    }
+
+
+
+    void setInt(int index, int parameter){
+         //auto ubarray = (cast(ubyte *)&parameter)[0..parameter.sizeof];
+        ubyte[4] ub = nativeToLittleEndian(parameter);
+  
+        setParameter(index, TypeTag.INT, to!string(parameter));
+    }
+
+    void setDouble(int index, double parameter){
+
+        setParameter(index, TypeTag.DOUBLE, to!string(parameter));
+    }
+
+    void setString(int index, string parameter){
+
+        //ubyte[4] ub = nativeToLittleEndian!string(parameter);
+        setParameter(index, TypeTag.STRING, to!string(parameter));
+    }
+
+    void setText(int index, string parameter){
+        setParameter(index, TypeTag.TEXT, to!string(parameter));
+    }
+
+}
+
 
 struct Connection{
     PGconn* conn;
@@ -56,30 +230,25 @@ struct Connection{
             throw new NotConnectedToDatabaseException("Not connection to database");
         }
         PGresult* res = PQexec(conn, query.toStringz());
-        ResultSet results = ResultSet(res);
+        ResultSet results = new ResultSet(res);
         return results;
     }
 
-    void executePreparedStatement(string query){
-        auto s = "2001".toStringz();
-        auto statement = PQprepare(conn, "stmtname".toStringz(), "select * from data_src where year > %s".toStringz(), 1, null);
-        /*auto paramVals = ["2004".toStringz()];
 
-          PGresult *res = PQexecPrepared(conn,
-                         statement,
-                         1,
-                         paramVals,
-                         [4],
-                         [0],
-                         0);
-
-        writeln(statement);*/
+    PreparedStatement createPreparedStatement(string query){
+        PreparedStatement ps = PreparedStatement(this.conn, query);
+        return ps;
     }
+
+
+
+
+    
 }
 
 
 
-struct ResultSet{
+class ResultSet{
     
     PGresult* res;
     int nFields;
@@ -162,11 +331,9 @@ struct ResultSet{
             
         }
 
-                foreach(i; 0..nrows){
+        foreach(i; 0..nrows){
             this.rows ~= Row(this.res,i, this.nFields, this);
-            //writeln(Row(this.res,i, this.nFields));
         }
-        //writeln(nrows);
     }
 
     @property bool empty()
@@ -199,15 +366,12 @@ struct ResultSet{
 
 
 
-    void getHeaders(){
-        foreach(i; 0..nFields){
-            write(to!Cstring(PQfname(res,i)));
-            write("|");
-        }writeln();
+    @property
+    string[] headers(){
+        return columnNames;
     }
 
     void getRows(){
-
         foreach(row; rows){
             foreach(field; row){
 
