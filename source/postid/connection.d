@@ -6,14 +6,16 @@ import std.range;
 import std.algorithm;
 import std.exception;
 import std.bitmanip;
+import std.format;
 import C.connection;
 
 
 enum TypeTag {
     INT = "int",
     STRING = "string",
-    BOLLEAN = "bool"
-
+    BOLLEAN = "bool",
+    DOUBLE = "double",
+    TEXT = "text"
 }
 
 class PGException: Exception{
@@ -87,6 +89,11 @@ struct PreparedStatement{
 
     }
 
+    ~this(){
+        PQexec(this.conn, "DEALLOCATE \"PREPARED STATEMENT\";");
+        
+    }
+
     ResultSet executePreparedStatement(){
 
         char*[] paramValues;
@@ -98,20 +105,42 @@ struct PreparedStatement{
         ubyte[][] bts;
 
         foreach(i,p; this.params){
-            ubyte[4] v;
+            //writeln(paramNum);
             if(p.tag == TypeTag.INT){
+                ubyte[int.sizeof] v;
                  v = nativeToBigEndian(to!int(p.val));
                 bts ~= v;
                 paramValues ~= cast(char*)bts[i];
                 paramLengths ~= v.sizeof;
                 paramFormats ~= 1;
             }
-            else{
-                args2 ~= p.val.dup;
-                paramValues ~= args2[i].ptr;
-                paramLengths ~= p.sizeof;
+            else if(p.tag == TypeTag.DOUBLE){
+                ubyte[double.sizeof] v;
+                v = nativeToBigEndian(to!double(p.val));
+                bts ~= v;
+                paramValues ~= cast(char*)bts[i];
+                paramLengths ~= v.sizeof;
+                paramFormats ~= 1;
+            }
+            else if(p.tag == TypeTag.TEXT){
+                ubyte[] v;
+                auto x = format("%s%s", p.val, "\0").dup;
+
+                v = cast(ubyte[]) x;
+                bts ~= v;
+                paramValues ~= cast(char*)bts[i];
+                paramLengths ~= v.sizeof;
                 paramFormats ~= 0;
             }
+            else{
+                auto xyz = p.val.dup;
+                paramValues ~= xyz.ptr;
+                //paramValues ~= p.val.dup.ptr;
+                paramLengths ~= p.val.sizeof;
+                paramFormats ~= 0;
+            }
+
+
 
 
         }
@@ -147,10 +176,19 @@ struct PreparedStatement{
         setParameter(index, TypeTag.INT, to!string(parameter));
     }
 
+    void setDouble(int index, double parameter){
+
+        setParameter(index, TypeTag.DOUBLE, to!string(parameter));
+    }
+
     void setString(int index, string parameter){
 
         //ubyte[4] ub = nativeToLittleEndian!string(parameter);
         setParameter(index, TypeTag.STRING, to!string(parameter));
+    }
+
+    void setText(int index, string parameter){
+        setParameter(index, TypeTag.TEXT, to!string(parameter));
     }
 
 }
