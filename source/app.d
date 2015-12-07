@@ -1,5 +1,5 @@
 import std.stdio;
-import postid.connection;
+import postgd.connection;
 
 
 void main() {
@@ -15,8 +15,16 @@ void main() {
 
         auto rs = checkDouble(conn);
         foreach(r; rs){
-            writeln(r);
+            //writeln(r);
         }
+
+        auto rs1 = checkJoin(conn);
+
+        writeln(rs1);
+        foreach(r; rs1){
+           // writeln(r);
+        }
+
 
         } catch(PGException e){
             writeln(e.msg);
@@ -28,6 +36,19 @@ ResultSet checkString(Connection conn){
         ps.setString(1, "D1066");
         ps.setString(2, "D1073");
         auto rs = ps.executePreparedStatement();
+        //auto rs = checkDouble(conn);
+        return rs;
+
+}
+
+//select * from data_src t1 join datsrcln t2 on t1.datasrc_id = t2.datasrc_id where t1.vol_city = 'Beltsville';
+
+ResultSet checkJoin(Connection conn){
+        auto ps = conn.createPreparedStatement("select * from data_src t1 join datsrcln t2 on t1.datasrc_id = t2.datasrc_id where t1.vol_city = $1");
+        ps.setText(1, "Beltsville");
+      
+        auto rs = ps.executePreparedStatement();
+        writeln(rs);
         //auto rs = checkDouble(conn);
         return rs;
 
